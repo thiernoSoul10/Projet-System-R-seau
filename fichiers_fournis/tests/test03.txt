@@ -1,0 +1,8 @@
+#
+# test03.txt - Exécuter une succession de commandes sans argument
+#
+ls  | echo BAH | echo BAH 
+echo 
+echo Iyed
+echo 
+ls
