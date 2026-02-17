@@ -51,15 +51,16 @@ int main()
 		}
 
 		printf("i: %d\n", i);
+		
 
 		// Création de processus.
 		if (i > 1){ // plus d'un processus
 			// Création des pipes nécessaires
 			int fd[i-1][2];
-			pid_t pids[i - 1];
+			pid_t pids[i];
 
 			// Ouverture des pipes
-			for (int k = 0; k < i; k++)
+			for (int k = 0; k < i - 1; k++)
 			{
 				pipe(fd[k]);
 			}
@@ -68,11 +69,8 @@ int main()
 			for(int k = 0; k < i; k++){
 				char **cmd = l->seq[k];
 
-				/* A enlever ici*/
-				if(strcmp("quit", cmd[0]) == 0) {
-					stop = 1;
-					break;
-				}
+				
+				// Fils k;
 				
 				pid_t p = Fork();
 				if(p == -1){ fprintf(stderr, "Erreur de creation de processus"); exit(-3);}
@@ -80,7 +78,7 @@ int main()
 				pids[k] = p; // On conserve les pids au cas où.
 				
 				if(p == 0){
-					// Fils k;
+
 					if(k > 0) // premiere commande non pris en compte
 						dup2(fd[k - 1][0], STDIN_FILENO);
 					
@@ -118,9 +116,9 @@ int main()
 				waitpid(pids[k], NULL, 0);
 			}
 			
-		} else if (i == 1) { // un seul processus
+		} else if (i == 1 && strcmp("quit", l->seq[0][0]) != 0) { // un seul processus
 			char **cmd = l->seq[0];
-
+			
 			pid_t p = Fork();
 			if(p == -1){ fprintf(stderr, "Erreur de creation de processus"); exit(-3);}
 			if(p > 0){
@@ -138,6 +136,8 @@ int main()
 
 				executeCmd(cmd);
 			}
+		} else if(strcmp("quit", l->seq[0][0]) == 0){
+			stop = 1; // cas de quit dans pipe pas gerer pour l'instant
 		}
 
 
