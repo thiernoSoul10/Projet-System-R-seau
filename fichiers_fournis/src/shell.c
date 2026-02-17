@@ -38,89 +38,111 @@ int main()
 		if (l->out) printf("out: %s\n", l->out);
 
 		/* Display each command of the pipe */
+		/* i est le Compteur du nombre de commande */
 		for (i=0; l->seq[i]!=0; i++) {
 			char **cmd = l->seq[i];
 			printf("seq[%d]: ", i);
 
 			for (j=0; cmd[j]!=0; j++) {
+				
 				printf("%s ", cmd[j]);
-				if(strcmp("quit", cmd[j]) == 0) {
+			}
+			printf("\n");
+		}
+
+		printf("i: %d\n", i);
+
+		// Création de processus.
+		if (i > 1){ // plus d'un processus
+			// Création des pipes nécessaires
+			int fd[i-1][2];
+			pid_t pids[i - 1];
+
+			// Ouverture des pipes
+			for (int k = 0; k < i; k++)
+			{
+				pipe(fd[k]);
+			}
+
+			// Création des fils
+			for(int k = 0; k < i; k++){
+				char **cmd = l->seq[k];
+
+				/* A enlever ici*/
+				if(strcmp("quit", cmd[0]) == 0) {
 					stop = 1;
 					break;
 				}
-			}
-			printf("\n");
+				
+				pid_t p = Fork();
+				if(p == -1){ fprintf(stderr, "Erreur de creation de processus"); exit(-3);}
 
-			if(!stop){
-				// Création de processus.
-				if(l->seq[i+1] != 0){
-					// pipe si deuxiéme commande existe
-					int fd[2];
-					pipe(fd);
-
-					pid_t p = Fork();
-					if(p == -1){ fprintf(stderr, "Erreur de creation de processus"); exit(-3);}
-					if(p > 0){
-
-						pid_t p1 = Fork();
-
-						if(p1 == 0){
-							close(fd[0]);
-
-							if(l->in){
-								gestionInOut(l->in, &(fd[1]), 'i');
-							}
-
-							if(l->out)
-								gestionInOut(l->out, &(fd[1]), 'i');
-
-							executeCmd(cmd);
-						} else if(p1 < 0){
-							exit(-3);
-						}
-
-						wait(NULL); // le parent attends son fils
-					} else {
-						// redirections
-						char **cmd2 = l->seq[i +1];
-						close(fd[1]);
-						if(l->out)
-							gestionInOut(l->out, &(fd[0]), 'i');
-
-						if(l->in)
-							gestionInOut(l->in, &(fd[0]), 'i');
-
-						executeCmd(cmd2);
+				pids[k] = p; // On conserve les pids au cas où.
+				
+				if(p == 0){
+					// Fils k;
+					if(k > 0) // premiere commande non pris en compte
+						dup2(fd[k - 1][0], STDIN_FILENO);
+					
+					if(k < i -1) // derniere commande non pris en compte
+						dup2(fd[k][1], STDOUT_FILENO);
+					
+					// Fermeture des pipes par le fils
+					for (j = 0; j < i - 1; j++) {
+						close(fd[j][0]);
+						close(fd[j][1]);
 					}
-					i++;
 
-
-
-
-				} else {
-					pid_t p = Fork();
-					if(p == -1){ fprintf(stderr, "Erreur de creation de processus"); exit(-3);}
-					if(p > 0){
-						wait(NULL); // le parent attends son fils
-					} else {
-						// redirections
-						int fd;
-						if(l->in){
-							gestionInOut(l->in, &fd, 'i');
-						}
-
-						if(l->out){
-							gestionInOut(l->out, &fd, 'o');
-						}
-
-						executeCmd(cmd);
+					int fd_redirection;
+					if(l->in){
+						gestionInOut(l->in, &fd_redirection, 'i');
 					}
+
+					if(l->out){
+						gestionInOut(l->out, &fd_redirection, 'o');
+					}
+					executeCmd(cmd);
 				}
 
-			} else{
-				fprintf(stdout, "Arret...\n");
+			
 			}
 
+			// Fermeture des pipes par le père
+			for (j = 0; j < i -1; j++) {
+				close(fd[j][0]);
+				close(fd[j][1]);
+			}
+
+			// attente des fils
+			for(int k = 0; k < i; k++){
+				waitpid(pids[k], NULL, 0);
+			}
+			
+		} else if (i == 1) { // un seul processus
+			char **cmd = l->seq[0];
+
+			pid_t p = Fork();
+			if(p == -1){ fprintf(stderr, "Erreur de creation de processus"); exit(-3);}
+			if(p > 0){
+				wait(NULL); // le parent attends son fils
+			} else {
+				// redirections
+				int fd;
+				if(l->in){
+					gestionInOut(l->in, &fd, 'i');
+				}
+
+				if(l->out){
+					gestionInOut(l->out, &fd, 'o');
+				}
+
+				executeCmd(cmd);
+			}
+		}
+
+
+		if(stop){
+			fprintf(stdout, "Arret...\n");
 		}
 	}
 
@@ -139,16 +161,18 @@ void gestionInOut(char *name, int *fd, char type){
 		exit(-1);
 	}
 
-	switch(errno){
-		case ENOENT:
-			fprintf(stderr, "command not found\n");
-			exit(EXIT_FAILURE);
-		case EACCES:
-			fprintf(stderr, "%s: Permission denied.\n", name);
-			exit(EXIT_FAILURE);
-		default:
-			perror("execv");
-			exit(EXIT_FAILURE);		
+	if(*fd < 0){
+		switch(errno){
+			case ENOENT:
+				fprintf(stderr, "command not found\n");
+				exit(EXIT_FAILURE);
+			case EACCES:
+				fprintf(stderr, "%s: Permission denied.\n", name);
+				exit(EXIT_FAILURE);
+			default:
+				perror("execv");
+				exit(EXIT_FAILURE);		
+		}
 	}
 
 
@@ -169,6 +193,14 @@ void executeCmd(char **cmd){
 	strcat(path, cmd[0]);
 	execvp(path, cmd);
 
-	perror("execv");
+	if (errno == ENOENT) {
+		fprintf(stderr, "%s: command not found\n", path);
+	}
+	else if (errno == EACCES) {
+		fprintf(stderr, "%s: Permission denied\n", path);
+	}
+	else {
+		perror("execvp");
+	}
 	exit(EXIT_FAILURE);
 }
