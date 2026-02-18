@@ -11,9 +11,17 @@
 void gestionInOut(char *name, int *fd, char type);
 void executeCmd(char **cmd);
 
+/* Traitant de SIGCHLD : ramasse les processus fils terminés en background pour éviter les zombies*/
+void handler(int s){
+	int status;
+	while(waitpid(-1, &status, WNOHANG|WUNTRACED) > 0);
+}
+
 int main()
 {
 	int stop = 0;
+
+	signal(SIGCHLD, handler); // enregistrement de handler de SIGCHLD
 
 	while (!stop) {
 		struct cmdline *l;
@@ -113,7 +121,8 @@ int main()
 
 			// attente des fils
 			for(int k = 0; k < i; k++){
-				waitpid(pids[k], NULL, 0);
+				if(!l->background)
+					waitpid(pids[k], NULL, 0); // on attend chaque fils uniquement si pas en background
 			}
 			
 		} else if (i == 1 && strcmp("quit", l->seq[0][0]) != 0) { // un seul processus
@@ -122,7 +131,9 @@ int main()
 			pid_t p = Fork();
 			if(p == -1){ fprintf(stderr, "Erreur de creation de processus"); exit(-3);}
 			if(p > 0){
-				wait(NULL); // le parent attends son fils
+				if(!l->background){ // // on attend le fils uniquement si pas en background
+					wait(NULL); 
+				}
 			} else {
 				// redirections
 				int fd;
