@@ -1,0 +1,2 @@
+# test07.txt - Tester les pipes multiples 
+echo bonjour | cut -c4-8 | wc -c

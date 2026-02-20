@@ -1,0 +1,3 @@
+# test06.txt - Tester la redirection d'entrée (<)
+echo Bonjour > out.txt
+cat < out.txt

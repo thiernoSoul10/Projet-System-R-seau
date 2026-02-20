@@ -1,0 +1,4 @@
+# test09.txt - Tester l'exécution en background 
+sleep 2 &
+echo "shell toujours disponible"
+ps

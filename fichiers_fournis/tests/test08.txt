@@ -1,0 +1,3 @@
+# test08.txt - Tester la gestion des erreurs
+commandeinexistante
+cat < fichier_inexistant.txt
