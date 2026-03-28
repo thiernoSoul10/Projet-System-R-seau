@@ -5,7 +5,7 @@
 
 CC=gcc
 CFLAGS=-Wall -g
-VPATH=src/
+VPATH=src:include
 
 # Note: -lnsl does not seem to work on Mac OS but will
 # probably be necessary on Solaris for linking network-related functions 
@@ -14,7 +14,7 @@ LIBS+=-lpthread
 
 INCLUDE = readcmd.h csapp.h
 OBJS = readcmd.o csapp.o
-INCLDIR = -I.
+INCLDIR = -Iinclude
 
 all: shell
 
@@ -26,4 +26,7 @@ all: shell
 
 clean:
 	rm -f shell *.o
+
+test: shell
+	./run_tests.sh
 
